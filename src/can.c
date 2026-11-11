@@ -296,7 +296,7 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 		return;
 	}
 
-	marker_frame_received(header->IDE, (header->IDE == CAN_ID_EXT) ? header->ExtId : header->StdId);
+	marker_frame_done(header->IDE, (header->IDE == CAN_ID_EXT) ? header->ExtId : header->StdId);
 
 	// The head slot stays free, so a full queue drops the newest message
 	uint8_t next = (rxqueue.head + 1) % RXQUEUE_LEN;
@@ -316,11 +316,11 @@ static void can_tx_complete(CAN_HandleTypeDef *hcan, uint8_t mailbox)
 
 	if (tir & CAN_TI0R_IDE)
 	{
-		marker_frame_sent(CAN_ID_EXT, tir >> CAN_TI0R_EXID_Pos);
+		marker_frame_done(CAN_ID_EXT, tir >> CAN_TI0R_EXID_Pos);
 	}
 	else
 	{
-		marker_frame_sent(CAN_ID_STD, tir >> CAN_TI0R_STID_Pos);
+		marker_frame_done(CAN_ID_STD, tir >> CAN_TI0R_STID_Pos);
 	}
 }
 

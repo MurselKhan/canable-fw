@@ -24,9 +24,9 @@ This repository contains sources for the slcan CANable firmware, based off of th
 - `RIIIIIIIIL` - Transmit remote frame (Extended ID) [ID, length]
 - `rIIIL` - Transmit remote frame (Standard ID) [ID, length]
 - `V` - Returns firmware version and remote path as a string
-- `kIIIMMM` - Mark only frames with a matching standard ID [ID, mask]
-- `KIIIIIIIIMMMMMMMM` - Mark only frames with a matching extended ID [ID, mask]
-- `k` - Mark every frame (default)
+- `kNIIIMMM` - Let marker N mark frames with a matching standard ID [marker, ID, mask]
+- `KNIIIIIIIIMMMMMMMM` - Let marker N mark frames with a matching extended ID [marker, ID, mask]
+- `kN` - Switch marker N off
 
 Note: Channel configuration commands must be sent before opening the channel. The channel must be opened before transmitting frames.
 
@@ -36,10 +36,12 @@ This firmware currently does not provide any ACK/NACK feedback for serial comman
 
 Two pins of the SWD header change level once per frame, so a logic analyzer can time bus events without decoding CAN.
 
-- SWCLK (PA14) toggles when a frame has been received from the bus.
-- SWDIO (PA13) toggles when a frame sent by this adapter has been acknowledged on the bus.
+- Marker 1 is SWCLK (PA14). It marks every frame by default.
+- Marker 2 is SWDIO (PA13). It is off by default.
 
-Every edge is one frame, and it follows the end of that frame on the bus. A frame is marked when it has the ID type of the filter and `(frame ID XOR filter ID) AND mask` is zero. For example, `k0107FE` marks the standard IDs 0x010 and 0x011. The filter can be changed at any time.
+A marker toggles its pin for every matching frame that completes on the bus. That covers frames this adapter received and frames it sent and got acknowledged. Every edge is one frame, and it follows the end of that frame on the bus.
+
+A frame matches when it has the ID type of the marker and `(frame ID XOR marker ID) AND mask` is zero. A zero mask matches every frame of either ID type. For example, `k10107FF` lets marker 1 mark the standard ID 0x010 only, and `k20107FE` lets marker 2 mark 0x010 and 0x011. The markers can be changed at any time.
 
 The firmware drives both pins as outputs, so SWD is not available while it runs. Keep debug probes disconnected and flash through the bootloader.
 
