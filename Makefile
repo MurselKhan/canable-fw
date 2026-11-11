@@ -172,11 +172,17 @@ $(BUILD_DIR)/$(TARGET).elf: $(OBJECTS) $(USB_OBJECTS) $(CUBELIB)
 		-Map=$(BUILD_DIR)/$(TARGET).map
 	$(SIZE) $@
 
-$(BUILD_DIR)/%.o: src/%.c | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -Os -c -o $@ $^
+# The flags carry the git version, so the application is rebuilt when they change
+CFLAGS_STAMP = $(BUILD_DIR)/cflags.stamp
 
-$(BUILD_DIR)/%.o: src/%.s | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -c -o $@ $^
+$(CFLAGS_STAMP): FORCE | $(BUILD_DIR)
+	@[ "$$(cat $@ 2>/dev/null)" = '$(CFLAGS)' ] || echo '$(CFLAGS)' > $@
+
+$(BUILD_DIR)/%.o: src/%.c $(CFLAGS_STAMP) | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -Os -c -o $@ $<
+
+$(BUILD_DIR)/%.o: src/%.s $(CFLAGS_STAMP) | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c -o $@ $<
 
 $(BUILD_DIR):
 	$(MKDIR) $@
@@ -189,4 +195,4 @@ clean:
 		-rm $(BUILD_DIR)/*.map
 		-rm $(BUILD_DIR)/*.bin
 
-.PHONY: clean all cubelib
+.PHONY: clean all cubelib FORCE
