@@ -42,6 +42,12 @@ ifneq ($(EXTERNAL_OSCILLATOR), 1)
 USER_CFLAGS += -DINTERNAL_OSCILLATOR
 endif
 
+# MKS_PRO=1 builds for the MKS CANable Pro V1.0, which has its LEDs on other pins
+ifeq ($(MKS_PRO), 1)
+USER_CFLAGS += -DMKS_PRO
+TARGET = canable-mks-pro-$(GIT_VERSION)
+endif
+
 # USER_LDFLAGS:  user LD flags
 USER_LDFLAGS = -fno-exceptions -ffunction-sections -fdata-sections -Wl,--gc-sections
 

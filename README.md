@@ -54,6 +54,7 @@ Your Linux distribution may also have a prebuilt package for `arm-none-eabi-gcc`
 
 - If you have a CANable device, you can compile using `make`. 
 - If you have a CANtact or other device with external oscillator, you can compile using `make INTERNAL_OSCILLATOR=1`
+- If you have an MKS CANable Pro V1.0, compile using `make MKS_PRO=1`. Its TX and RX LEDs are on PA0 and PA1 and light up on a low pin. The image is named `canable-mks-pro-<version>.bin`.
 
 ## Flashing with the Bootloader
 
