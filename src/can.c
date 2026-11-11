@@ -3,11 +3,13 @@
 //
 
 #include "stm32f0xx_hal.h"
+#include <string.h>
 #include "slcan.h"
 #include "usbd_cdc_if.h"
 #include "can.h"
 #include "led.h"
 #include "error.h"
+#include "marker.h"
 
 
 // Private variables
@@ -17,6 +19,7 @@ static uint32_t prescaler;
 static can_bus_state_t bus_state = OFF_BUS;
 static uint8_t can_autoretransmit = ENABLE;
 static can_txbuf_t txqueue = {0};
+static can_rxbuf_t rxqueue = {0};
 
 
 // Initialize CAN peripheral settings, but don't actually start the peripheral
@@ -81,7 +84,11 @@ void can_enable(void)
 
         HAL_CAN_ConfigFilter(&can_handle, &filter);
 
+        rxqueue.head = 0;
+        rxqueue.tail = 0;
+
         HAL_CAN_Start(&can_handle);
+        HAL_CAN_ActivateNotification(&can_handle, CAN_IT_RX_FIFO0_MSG_PENDING | CAN_IT_TX_MAILBOX_EMPTY);
         bus_state = ON_BUS;
 
         led_blue_on();
@@ -237,23 +244,31 @@ void can_process(void)
 }
 
 
-// Receive message from the CAN bus RXFIFO
+// Take the oldest received message out of the RX queue
 uint32_t can_rx(CAN_RxHeaderTypeDef *rx_msg_header, uint8_t* rx_msg_data)
 {
-    uint32_t status = HAL_CAN_GetRxMessage(&can_handle, CAN_RX_FIFO0, rx_msg_header, rx_msg_data);
+	if (rxqueue.tail == rxqueue.head)
+	{
+		return HAL_ERROR;
+	}
+
+	*rx_msg_header = rxqueue.header[rxqueue.tail];
+	memcpy(rx_msg_data, rxqueue.data[rxqueue.tail], RXQUEUE_DATALEN);
+	rxqueue.tail = (rxqueue.tail + 1) % RXQUEUE_LEN;
+
 	led_blue_on();
-    return status;
+	return HAL_OK;
 }
 
 
-// Check if a CAN message has been received and is waiting in the FIFO
+// Check if a CAN message has been received and is waiting in the RX queue
 uint8_t is_can_msg_pending(uint8_t fifo)
 {
     if (bus_state == OFF_BUS)
     {
         return 0;
     }
-    return(HAL_CAN_GetRxFifoFillLevel(&can_handle, CAN_RX_FIFO0) > 0);
+    return(rxqueue.tail != rxqueue.head);
 }
 
 
@@ -268,5 +283,61 @@ CAN_HandleTypeDef* can_gethandle(void)
 void HAL_CAN_RxFifo0FullCallback(CAN_HandleTypeDef *hcan)
 {
 	error_assert(ERR_CANRXFIFO_OVERFLOW);
+}
+
+
+// Callback for a message in FIFO0. Moves it into the RX queue and marks it.
+void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
+{
+	CAN_RxHeaderTypeDef *header = &rxqueue.header[rxqueue.head];
+
+	if (HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, header, rxqueue.data[rxqueue.head]) != HAL_OK)
+	{
+		return;
+	}
+
+	marker_frame_received(header->IDE, (header->IDE == CAN_ID_EXT) ? header->ExtId : header->StdId);
+
+	// The head slot stays free, so a full queue drops the newest message
+	uint8_t next = (rxqueue.head + 1) % RXQUEUE_LEN;
+	if (next == rxqueue.tail)
+	{
+		error_assert(ERR_CANRXFIFO_OVERFLOW);
+		return;
+	}
+	rxqueue.head = next;
+}
+
+
+// Mark a message that left a TX mailbox and was acknowledged on the bus
+static void can_tx_complete(CAN_HandleTypeDef *hcan, uint8_t mailbox)
+{
+	uint32_t tir = hcan->Instance->sTxMailBox[mailbox].TIR;
+
+	if (tir & CAN_TI0R_IDE)
+	{
+		marker_frame_sent(CAN_ID_EXT, tir >> CAN_TI0R_EXID_Pos);
+	}
+	else
+	{
+		marker_frame_sent(CAN_ID_STD, tir >> CAN_TI0R_STID_Pos);
+	}
+}
+
+
+// Callbacks for a completed transmission
+void HAL_CAN_TxMailbox0CompleteCallback(CAN_HandleTypeDef *hcan)
+{
+	can_tx_complete(hcan, 0);
+}
+
+void HAL_CAN_TxMailbox1CompleteCallback(CAN_HandleTypeDef *hcan)
+{
+	can_tx_complete(hcan, 1);
+}
+
+void HAL_CAN_TxMailbox2CompleteCallback(CAN_HandleTypeDef *hcan)
+{
+	can_tx_complete(hcan, 2);
 }
 

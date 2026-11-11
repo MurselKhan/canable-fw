@@ -35,6 +35,19 @@ typedef struct cantxbuf_
 } can_txbuf_t;
 
 
+// CAN receive buffering
+#define RXQUEUE_LEN 16 // Number of buffers allocated
+#define RXQUEUE_DATALEN 8 // CAN DLC length of data buffers
+
+typedef struct canrxbuf_
+{
+	uint8_t data[RXQUEUE_LEN][RXQUEUE_DATALEN]; // Data buffer
+	CAN_RxHeaderTypeDef header[RXQUEUE_LEN]; // Header buffer
+	volatile uint8_t head; // Head pointer, moved by the CAN interrupt
+	volatile uint8_t tail; // Tail pointer, moved by the main loop
+} can_rxbuf_t;
+
+
 // Prototypes
 void can_init(void);
 void can_enable(void);

@@ -9,6 +9,7 @@
 #include "slcan.h"
 #include "printf.h"
 #include "usbd_cdc_if.h"
+#include "marker.h"
 
 
 // Parse an incoming CAN frame into an outgoing slcan message
@@ -77,6 +78,50 @@ int8_t slcan_parse_frame(uint8_t *buf, CAN_RxHeaderTypeDef *frame_header, uint8_
 
     // Return number of bytes in string
     return msg_position;
+}
+
+
+// Read hex digits that are already converted from ASCII
+static int8_t slcan_parse_hex(uint8_t *digits, uint8_t num_digits, uint32_t *value)
+{
+    *value = 0;
+    for (uint8_t i = 0; i < num_digits; i++)
+    {
+        if (digits[i] > 0xF)
+        {
+            return -1;
+        }
+        *value = (*value << 4) + digits[i];
+    }
+    return 0;
+}
+
+
+// Set the frame marker filter from an ID and a mask. No arguments mark every frame.
+static int8_t slcan_set_marker_filter(uint8_t *args, uint8_t len, uint32_t ide)
+{
+    uint8_t id_len = (ide == CAN_ID_EXT) ? SLCAN_EXT_ID_LEN : SLCAN_STD_ID_LEN;
+    uint32_t id_max = (ide == CAN_ID_EXT) ? 0x1FFFFFFF : 0x7FF;
+    uint32_t id = 0;
+    uint32_t mask = 0;
+
+    if (len == 0)
+    {
+        marker_set_filter(ide, 0, 0);
+        return 0;
+    }
+
+    if (len != 2 * id_len
+        || slcan_parse_hex(args, id_len, &id) != 0
+        || slcan_parse_hex(args + id_len, id_len, &mask) != 0
+        || id > id_max
+        || mask > id_max)
+    {
+        return -1;
+    }
+
+    marker_set_filter(ide, id, mask);
+    return 0;
 }
 
 
@@ -174,6 +219,13 @@ int8_t slcan_parse_str(uint8_t *buf, uint8_t len)
 			CDC_Transmit_FS((uint8_t*)errstr, strlen(errstr));
 	        return 0;
 		}
+
+	    // Nonstandard!
+		case 'K':
+	    	frame_header.IDE = CAN_ID_EXT;
+		case 'k':
+			// Set frame marker filter command
+			return slcan_set_marker_filter(buf + 1, len - 1, frame_header.IDE);
 
 		case 'T':
 	    	frame_header.IDE = CAN_ID_EXT;

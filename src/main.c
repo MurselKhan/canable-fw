@@ -12,6 +12,7 @@
 #include "system.h"
 #include "led.h"
 #include "error.h"
+#include "marker.h"
 
 
 int main(void)
@@ -20,6 +21,7 @@ int main(void)
     system_init();
     can_init();
     led_init();
+    marker_init();
     usb_init();
 
     led_blue_blink(2);
